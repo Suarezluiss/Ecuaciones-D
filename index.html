@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Simulador Interactivo de Caída Libre</title>
+  <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@300;400;600;800&display=swap" rel="stylesheet">
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['\\(', '\\)'], ['$', '$']],
+        displayMath: [['\\[', '\\]'], ['$$', '$$']]
+      },
+      chtml: {
+        scale: 1.05,
+        displayAlign: 'left',
+        displayIndent: '0'
+      },
+      options: {
+        skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
+      }
+    };
+  </script>
+
+  <!-- Librerías -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.2/p5.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" defer></script>
+
+  <link rel="stylesheet" href="estilos.css">
+  <script src="script.js" defer></script>
+</head>
+
+<body>
+  <header>
+    <div>
+      <h1>Simulador Interactivo de Caída Libre</h1>
+      <p class="subtitle">Explora la física de la caída libre con métodos numéricos y comparación analítica.</p>
+    </div>
+    <span class="tag">Física • Ecuaciones Diferenciales</span>
+  </header>
+
+  <div id="debug">
+    Estado: iniciando…
+  </div>
+
+  <div class="wrap">
+    <aside>
+      <div class="section-title">Escenario</div>
+      <div class="row">
+        <label for="preset">Preajustes</label>
+        <select id="preset">
+          <option value="earth_air">Tierra (aire)</option>
+          <option value="earth_vac">Tierra (vacío)</option>
+          <option value="moon_vac">Luna (vacío)</option>
+          <option value="jupiter_dense">Planeta gaseoso</option>
+          <option value="water">Líquido (agua)</option>
+          <option value="custom">Custom</option>
+        </select>
+      </div>
+
+      <div class="row actions-row">
+        <button class="btn" id="btnToggleCustom">Editar parámetros</button>
+      </div>
+
+      <div class="section-title">Modelo físico</div>
+      <div class="row">
+        <label for="model">Resistencia</label>
+        <select id="model">
+          <option value="ideal">Ideal (sin fricción)</option>
+          <option value="linear">Lineal (−k·v)</option>
+          <option value="quadratic">Cuadrática (−k·v·|v|)</option>
+        </select>
+      </div>
+
+      <div class="section-title">Método numérico</div>
+      <div class="row">
+        <label for="method">Método</label>
+        <select id="method">
+          <option value="rk4">Runge–Kutta 4</option>
+          <option value="euler">Euler</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <label for="dt">Δt (s)</label>
+        <input id="dt" type="number" step="0.001" value="0.01" min="0.001" />
+      </div>
+
+      <div class="section-title">Parámetros</div>
+      <div class="row">
+        <label for="g">g (m/s²)</label>
+        <input id="g" type="number" step="0.01" value="9.81" disabled />
+      </div>
+      <div class="row">
+        <label for="k">k (kg/s ó kg/m)</label>
+        <input id="k" type="number" step="0.1" value="4" disabled />
+      </div>
+      <div class="row">
+        <label for="m">m (kg)</label>
+        <input id="m" type="number" step="0.1" value="2" disabled />
+      </div>
+
+      <div class="section-title">Condiciones iniciales</div>
+      <div class="row">
+        <label for="y0">Altura inicial (m)</label>
+        <input id="y0" type="number" step="0.1" value="50" />
+      </div>
+      <div class="row">
+        <label for="v0">Velocidad inicial (m/s)</label>
+        <input id="v0" type="number" step="0.1" value="0" />
+      </div>
+
+      <div class="row controls-grid">
+        <button class="btn primary" id="btnStart">Iniciar</button>
+        <button class="btn" id="btnPause">Pausar</button>
+        <button class="btn warn" id="btnReset">Reiniciar</button>
+        <button class="btn ghost" id="btnAddShot">Guardar curva</button>
+      </div>
+
+      <div class="kpi">
+        <div class="card">
+          <h4>Tiempo</h4>
+          <div class="v" id="kpi_time">0.00</div>
+        </div>
+        <div class="card">
+          <h4>Desplazamiento</h4>
+          <div class="v" id="kpi_y">0.00</div>
+        </div>
+        <div class="card">
+          <h4>Velocidad</h4>
+          <div class="v" id="kpi_v">0.00</div>
+        </div>
+        <div class="card">
+          <h4>v terminal</h4>
+          <div class="v" id="kpi_vt">—</div>
+        </div>
+      </div>
+
+      <div class="panel inner-panel">
+        <div class="section-title">Verificación de velocidad terminal</div>
+        <div class="row">
+          <label for="vt_user">Tu vₜ</label>
+          <input id="vt_user" type="number" step="0.01" placeholder="Ingresa tu resultado" />
+        </div>
+        <div class="row actions-row">
+          <button class="btn" id="btnCheckVT">Comparar</button>
+          <span id="vt_result" class="pill">—</span>
+        </div>
+        <div class="hint">Umbral de aceptación: ±2% respecto al valor del simulador.</div>
+      </div>
+
+      <div class="panel inner-panel">
+        <div class="section-title">Calcular k automáticamente</div>
+
+        <div class="mini-title">1) Desde vₜ objetivo</div>
+        <div class="row">
+          <label for="vt_for_k">vₜ (m/s)</label>
+          <input id="vt_for_k" type="number" step="0.01" placeholder="Ej. 55" />
+        </div>
+        <div class="row actions-row">
+          <button class="btn" id="btnKFromVT">Calcular k desde vₜ</button>
+        </div>
+        <div class="hint">Lineal: k = m·g / |vₜ| &nbsp;&nbsp;•&nbsp;&nbsp; Cuadrático: k = m·g / vₜ²</div>
+
+        <div class="mini-title">2) Cuadrático (propiedades del fluido)</div>
+        <div class="row">
+          <label for="rho">ρ (kg/m³)</label>
+          <input id="rho" type="number" step="0.001" value="1.225" />
+        </div>
+        <div class="row">
+          <label for="Cd">C<sub>d</sub></label>
+          <input id="Cd" type="number" step="0.01" value="0.47" />
+        </div>
+        <div class="row">
+          <label for="A">A (m²)</label>
+          <input id="A" type="number" step="0.0001" value="0.01" />
+        </div>
+        <div class="row actions-row">
+          <button class="btn" id="btnKFromPropsQuad">Calcular k (cuadrático)</button>
+        </div>
+        <div class="hint">\(k = \frac{1}{2}\rho C_d A\)</div>
+
+        <div class="mini-title">3) Lineal (Stokes)</div>
+        <div class="row">
+          <label for="mu">μ (Pa·s)</label>
+          <input id="mu" type="number" step="0.000001" value="0.0000181" />
+        </div>
+        <div class="row">
+          <label for="r">r (m)</label>
+          <input id="r" type="number" step="0.0001" value="0.05" />
+        </div>
+        <div class="row actions-row">
+          <button class="btn" id="btnKFromPropsLin">Calcular k (lineal)</button>
+        </div>
+        <div class="hint">\(k = 6\pi\mu r\)</div>
+
+        <div class="row">
+          <span id="k_calc_status" class="hint">Resultado: —</span>
+        </div>
+      </div>
+
+      <div class="panel formula-panel">
+        <div class="section-title">Formulación analítica</div>
+
+        <div class="formula-block">
+          <div class="formula-label">Modelo lineal</div>
+          <div class="equation">
+            \[
+            v(t)=\frac{mg}{k}+\left(v_0-\frac{mg}{k}\right)e^{-\frac{k}{m}t}
+            \]
+          </div>
+          <div class="equation">
+            \[
+            y(t)=\frac{mg}{k}t+\frac{m}{k}\left(v_0-\frac{mg}{k}\right)\left(1-e^{-\frac{k}{m}t}\right)
+            \]
+          </div>
+        </div>
+
+        <div class="formula-block">
+          <div class="formula-label">Modelo cuadrático (desde reposo)</div>
+          <div class="equation">
+            \[
+            v(t)=\sqrt{\frac{mg}{k}}\tanh\left(\sqrt{\frac{gk}{m}}\,t\right)
+            \]
+          </div>
+        </div>
+
+        <div class="row toggle-row">
+          <label for="showAnalytic">Mostrar curvas analíticas</label>
+          <input id="showAnalytic" type="checkbox" />
+        </div>
+      </div>
+    </aside>
+
+    <main>
+      <div class="panel stage-panel">
+        <div id="p5-holder"></div>
+
+        <div class="legend">
+          <span><i class="legend-blue"></i> Trayectoria</span>
+          <span><i class="legend-green"></i> Impacto</span>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div class="panel">
+          <h3 class="panel-title">Velocidad v(t)</h3>
+          <canvas id="chartV" height="180"></canvas>
+        </div>
+
+        <div class="panel">
+          <h3 class="panel-title">Desplazamiento y(t)</h3>
+          <canvas id="chartY" height="180"></canvas>
+        </div>
+      </div>
+
+      <div class="footer">
+        Consejo: prueba diferentes escenarios y compara Euler vs RK4. Activa las curvas analíticas para validar la
+        simulación.
+      </div>
+    </main>
+  </div>
+</body>
+
+</html>
